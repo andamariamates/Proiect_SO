@@ -19,7 +19,7 @@ void create_hunt_directory(const char *dir_name)
 {
     if(mkdir(dir_name, 0755) == -1 && errno != EEXIST)
     {
-        perror("hello");
+        perror("mkdir");
         return;
     }
 }
