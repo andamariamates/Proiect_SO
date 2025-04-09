@@ -4,10 +4,11 @@
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
+#include <errno.h> //folosita la create_hunt_directory
 #include <dirent.h>
 
-typedef struct Treasure {
+typedef struct Treasure 
+{
     int treasure_id;
     char user_name[20];
     float latitude;
@@ -16,75 +17,96 @@ typedef struct Treasure {
     int value;
 } Treasure;
 
-void log_action(const char *action) {
-    int log_fd = open("log.txt", O_WRONLY | O_CREAT | O_APPEND, 0644);
-    if (log_fd >= 0) {
-        write(log_fd, action, strlen(action));
-        write(log_fd, "\n", 1);
-        close(log_fd);
+void log_action(const char *action) 
+{ //action = numele actiunii ce se va scrie in fisierul text
+    int log_fd = open("log.txt", O_WRONLY | O_CREAT | O_APPEND, 0644); //creeaza, deschide si scrie la finalul fisierul "log.txt"
+    //0644 = 0000 0110 0100 0100
+    if (log_fd >= 0) //succes
+    {
+        write(log_fd, action, strlen(action)); //scriem in fisierul "log.txt" numele actiunii de lungime strlen(action)
+        write(log_fd, "\n", 1); //trecem pe randul urmator
+        close(log_fd); //inchidem pe moment fisierul "log.txt"
     }
-}
-
-void create_hunt_directory(const char *dir_name) {
-    if (mkdir(dir_name, 0755) == -1 && errno != EEXIST) {
-        perror("mkdir");
-    }
-    log_action("create_hunt_directory");
-}
-
-void build_filepath(char *buffer, const char *dir_name) {
-    snprintf(buffer, 256, "%s/treasures.txt", dir_name);
-}
-
-void add(const char *filepath, Treasure *t) {
-    int fd = open(filepath, O_WRONLY | O_CREAT | O_APPEND, 0644);
-    if (fd < 0) {
-        perror("open");
+    else //daca nu s-a deschis fisierul "log.txt" 
+    {
+        perror("log"); //=> eroare
         return;
+    }
+}
+
+void create_hunt_directory(const char *dir_name) 
+{ //dir_name reprezinta numele directorului in care va trebui sa lucram
+    if (mkdir(dir_name, 0755) /*creeaza un director*/ == -1 /*eroare la creare*/ && errno != EEXIST /*dar nu e eroare la existenta sa*/) {
+    //0755 = 0000 0111 0101 0101
+        perror("mkdir"); //tiparim o eroare la mkdir
+    }
+    //altfel, continuam cursul programului
+    log_action("create_hunt_directory"); //adaugam in fisierul de "log.txt" creat anterior actiunea "create_hunt_directory", pentru ca s-a facut cu succes
+}
+
+void build_filepath(char *string, const char *dir_name) 
+{ 
+    snprintf(string, 256, "%s/treasures.txt", dir_name);
+    //snprintf = construieste un string de maxim 256 de caractere, concatenand cele doua string-uri
+}
+
+void add(const char *hunt_dir, Treasure *t) 
+{ //scop: adaugarea unei comori intr-o vanatoare
+    int fd = open(hunt_dir, O_WRONLY | O_CREAT | O_APPEND, 0644);//creeaza, deschide si scrie la finalul fisierul
+    if (fd < 0) { //eroare la deschiderea fisierului
+        perror("open");
+        return; //iesim din functia add
     }
 
     char buffer[256];
     int len = snprintf(buffer, sizeof(buffer), "%d %s %.2f %.2f %s %d\n", t->treasure_id, t->user_name, t->latitude, t->longitude, t->clue, t->value);
+    //concatenam buffer-ul (inainte, gol) cu exact fiecare continut al campului din Treasure t, ca sa putem face fiser text, nu binar, fara erori
     write(fd, buffer, len);
-    close(fd);
+    //scriem in fisier exact ce am primit de la tastatura
+    close(fd); //inchidem fisierul
 
-    log_action("add");
+    log_action("add"); //adaugam in fisierul de "log.txt" creat anterior actiunea "add", pentru ca s-a facut cu succes
 }
 
-void list(const char *hunt_dir) {
-    struct stat st;
-    if (stat(hunt_dir, &st) != 0 || !S_ISDIR(st.st_mode)) {
-        write(STDOUT_FILENO, "Directorul nu exista!\n", 23);
+void list(const char *hunt_dir) 
+{ //scop: listarea continutului fisierului "treasure.txt" in terminal 
+    struct stat st; //stocam info despre un fisier sau director (permisiuni, dimenisune, tip)
+    if (stat(hunt_dir, &st) != 0) //verificam daca directorul specificat in "hunt_dir" exista 
+    { 
+        perror("list, dir");
         return;
     }
 
     char filepath[256];
-    snprintf(filepath, sizeof(filepath), "%s/treasures.txt", hunt_dir);
+    build_filepath(filepath, hunt_dir); //ne folosim de functia de mai sus pentru a concatena informatiile
 
-    int fd = open(filepath, O_RDONLY);
-    if (fd < 0) {
+    int fd = open(filepath, O_RDONLY); //deschidem fisierul concatenat mai sus
+    if (fd < 0) //posibila eroare la deschidere
+    { 
         perror("open");
         return;
     }
 
     char buf[1024];
     ssize_t bytes_read;
-    write(STDOUT_FILENO, "Lista comorilor:\n", 18);
+    write(0, "Comori:\n", 10); //scriem in terminal
 
-    while ((bytes_read = read(fd, buf, sizeof(buf))) > 0) {
-        write(STDOUT_FILENO, buf, bytes_read);
+    while ((bytes_read = read(fd, buf, sizeof(buf))) > 0) { //citim fin fisier
+        write(0, buf, bytes_read); //scriem in terminal
     }
 
-    close(fd);
-    log_action("list");
+    close(fd); //inchidem fisierul
+    log_action("list"); //adaugam in fisierul de "log.txt" creat anterior actiunea "list", pentru ca s-a facut cu succes
 }
 
-void view(const char *hunt_dir, int search_id) {
+void view(const char *hunt_dir, int search_id) 
+{
     char filepath[256];
-    snprintf(filepath, sizeof(filepath), "%s/treasures.txt", hunt_dir);
+    build_filepath(filepath, hunt_dir); //ne folosim de functia de mai sus pentru a concatena informatiile
 
-    int fd = open(filepath, O_RDONLY);
-    if (fd < 0) {
+    int fd = open(filepath, O_RDONLY); //deschidem fisierul concatenat mai sus
+    if (fd < 0) //posibila eroare la deschidere
+    {
         perror("open");
         return;
     }
@@ -93,36 +115,48 @@ void view(const char *hunt_dir, int search_id) {
     ssize_t bytes_read;
     int found = 0;
 
-    while ((bytes_read = read(fd, buf, sizeof(buf) - 1)) > 0) {
-        buf[bytes_read] = '\0';
-        char *line = strtok(buf, "\n");
-        while (line) {
+    while ((bytes_read = read(fd, buf, sizeof(buf) - 1)) > 0) { //cat timp citim "ceva" din fisier
+        buf[bytes_read] = '\0'; //ultimul caracter indica ca am terminat o linie
+        char *line = strtok(buf, "\n"); //cand gaseste new line, ne atentioneaza ca am terminat o linie
+        while (line) { //cat timp exista linii
             int id;
-            sscanf(line, "%d", &id);
-            if (id == search_id) {
-                printf("Comoara gasita: %s\n", line);
-                found = 1;
-                break;
+            sscanf(line, "%d", &id); //citim id-ul
+            if (id == search_id) 
+            { //daca e id-ul de care avem nevoie
+                printf("Comoara gasita: %s\n", line); //scriem la tasatatura linia
+                found = 1; //flag
+                break; 
             }
-            line = strtok(NULL, "\n");
+            line = strtok(NULL, "\n"); //continua pana cand gaseste eof sau new line
         }
-        if (found) break;
+        if (found == 1) 
+        {
+            break; //daca s-a gasit intre timp, iesim din while
+        }
     }
 
-    if (!found) printf("Comoara cu ID-ul %d nu a fost gasita.\n", search_id);
+    if (!found)  //daca nu am gasit deloc id-ul, scriem la tastatura
+    {
+        printf("Comoara cu ID-ul %d nu a fost gasita.\n", search_id);
+    }
     close(fd);
-    log_action("view");
+
+    log_action("view"); //adaugam in fisierul de "log.txt" creat anterior actiunea "view", pentru ca s-a facut cu succes
 }
 
-void remove_hunt(const char *hunt_dir) {
+void remove_hunt(const char *hunt_dir) 
+{
     struct stat st;
-    if (stat(hunt_dir, &st) != 0 || !S_ISDIR(st.st_mode)) {
-        printf("Directorul '%s' nu exista sau nu este valid.\n", hunt_dir);
+    if (stat(hunt_dir, &st) != 0) 
+    {
+        perror("remove, dir");
         return;
     }
 
     DIR *dir = opendir(hunt_dir);
-    if (!dir) {
+    if (!dir) 
+    {
+
         perror("opendir");
         return;
     }
@@ -130,7 +164,8 @@ void remove_hunt(const char *hunt_dir) {
     struct dirent *entry;
     char path[512];
 
-    while ((entry = readdir(dir)) != NULL) {
+    while ((entry = readdir(dir)) != NULL) 
+    {
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
             continue;
         snprintf(path, sizeof(path), "%s/%s", hunt_dir, entry->d_name);
@@ -138,9 +173,12 @@ void remove_hunt(const char *hunt_dir) {
     }
     closedir(dir);
 
-    if (rmdir(hunt_dir) == 0) {
+    if (rmdir(hunt_dir) == 0) 
+    {
         printf("Hunt-ul '%s' a fost sters cu succes!\n", hunt_dir);
-    } else {
+    } 
+    else 
+    {
         perror("rmdir");
     }
 
@@ -149,19 +187,22 @@ void remove_hunt(const char *hunt_dir) {
     log_action(msg);
 }
 
-void remove_treasure(const char *hunt_dir, int delete_id) {
+void remove_treasure(const char *hunt_dir, int delete_id) 
+{
     char filepath[256], temp_filepath[256];
     snprintf(filepath, sizeof(filepath), "%s/treasures.txt", hunt_dir);
     snprintf(temp_filepath, sizeof(temp_filepath), "%s/temp.txt", hunt_dir);
 
     int fd_read = open(filepath, O_RDONLY);
-    if (fd_read < 0) {
+    if (fd_read < 0) 
+    {
         perror("open read");
         return;
     }
 
     int fd_write = open(temp_filepath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    if (fd_write < 0) {
+    if (fd_write < 0) 
+    {
         perror("open write");
         close(fd_read);
         return;
@@ -173,8 +214,10 @@ void remove_treasure(const char *hunt_dir, int delete_id) {
     int i = 0, kept = 0;
 
     while ((bytes_read = read(fd_read, buf, sizeof(buf))) > 0) {
-        for (ssize_t j = 0; j < bytes_read; ++j) {
-            if (buf[j] == '\n' || i == sizeof(line) - 1) {
+        for (ssize_t j = 0; j < bytes_read; ++j) 
+        {
+            if (buf[j] == '\n' || i == sizeof(line) - 1) 
+            {
                 line[i] = '\0';
                 int id;
                 sscanf(line, "%d", &id);
@@ -201,7 +244,8 @@ void remove_treasure(const char *hunt_dir, int delete_id) {
     log_action(msg);
 }
 
-int main() {
+int main() 
+{
     char hunt_name[20];
     printf("Introduceti numele hunt-ului: ");
     scanf("%s", hunt_name);
@@ -212,7 +256,8 @@ int main() {
     build_filepath(filepath, hunt_name);
 
     int action;
-    do {
+    do 
+    {
         printf("\nAlegeti actiunea dorita:\n");
         printf("1. Adauga treasure\n");
         printf("2. Listeaza comorile\n");

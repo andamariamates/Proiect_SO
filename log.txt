@@ -1,0 +1,6 @@
+create_hunt_directory
+add
+add
+list
+view
+exit
