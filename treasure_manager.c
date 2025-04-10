@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h> //folosita la create_hunt_directory
-#include <dirent.h>
+#include <dirent.h> //folosita la remove_hunt
 
 typedef struct Treasure 
 {
@@ -13,7 +13,7 @@ typedef struct Treasure
     char user_name[20];
     float latitude;
     float longitude;
-    char clue[100];
+    char clue[1000];
     int value;
 } Treasure;
 
@@ -145,102 +145,119 @@ void view(const char *hunt_dir, int search_id)
 }
 
 void remove_hunt(const char *hunt_dir) 
-{
-    struct stat st;
-    if (stat(hunt_dir, &st) != 0) 
+{ //scop: stergerea sirului de caractere hunt_dir 
+    struct stat st; //informatii despre directorul specificat
+    if (stat(hunt_dir, &st) != 0) //verifica daca directorul hunt_dir exista folosind stat-ul declarat anterior
     {
-        perror("remove, dir");
+        perror("remove, dir"); //afiseaza eroare la incercarea de a sterge directorul in cauza
         return;
     }
 
-    DIR *dir = opendir(hunt_dir);
-    if (!dir) 
+    DIR *dir = opendir(hunt_dir); //opendir, mai "usoara" decat open, dar e speciala pentru directoare, ca sa le putem deschide la momentul compilarii
+    if (!dir) //eroare la deschiderea directorului
     {
-
         perror("opendir");
         return;
     }
 
-    struct dirent *entry;
-    char path[512];
+    struct dirent *entry; //dirent, ca un fel de stat, este scris deja in bilioteca <dirent.h> si are infromatiile despre fiecare fisier sau director in parte
+    char path[100];
 
-    while ((entry = readdir(dir)) != NULL) 
+    while ((entry = readdir(dir)) != NULL) //parcurge intrarile, adica fisierrel si directoarele din hunt_dir
     {
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
             continue;
-        snprintf(path, sizeof(path), "%s/%s", hunt_dir, entry->d_name);
-        remove(path);
-    }
-    closedir(dir);
+        //verifica daca intrarea e directorul curent sau directorul parinte, pe care le evitam ca sa nu ramanem blocati in ciclu infinit
 
-    if (rmdir(hunt_dir) == 0) 
+        snprintf(path, sizeof(path), "%s/%s", hunt_dir, entry->d_name);
+        //concatenam calea completa a fisierului sau directorului curent cu '/' ca sa stim ce trebuie sters
+
+        struct stat entry_stat; //informatiile despre fisiere
+        if (stat(path, &entry_stat) == 0 && S_ISDIR(entry_stat.st_mode)) //a doua verifica saca e director, prima daca e fisier. in orice caz, trebuie sa-l stergem
+        {
+            remove_hunt(path);
+        } 
+        else {
+            if (remove(path) != 0)
+                perror("remove");
+        }
+    }
+    closedir(dir); //am terminat de mers prin director si de sters fisierele din el
+
+    if (rmdir(hunt_dir) == 0) //stergem directorul in sine
     {
         printf("Hunt-ul '%s' a fost sters cu succes!\n", hunt_dir);
     } 
-    else 
+    else //posibila eroare la stergerea directorului 
     {
         perror("rmdir");
     }
 
-    char msg[300];
-    snprintf(msg, sizeof(msg), "delete %s", hunt_dir);
+    char msg[100];
+    snprintf(msg, sizeof(msg), "delete %s", hunt_dir); //concatenam mesajul de logare cu numele directorului ca sa  il adaugam in fisierul log.txt
     log_action(msg);
 }
 
 void remove_treasure(const char *hunt_dir, int delete_id) 
-{
-    char filepath[256], temp_filepath[256];
+{ //scop: stergerea unei comori cu id-ul int delete_if dintr-un hunt hunt_dir
+    char filepath[100], temp_filepath[100];
+    //filepath contine calea completa catre fisieruul "treasure.txt" din directorul hunt_dir
+    //temp_filepath continea calea completa catre un fisier temporar "temp.txt" care va fi folosit pentru a rescrie datele 
     snprintf(filepath, sizeof(filepath), "%s/treasures.txt", hunt_dir);
     snprintf(temp_filepath, sizeof(temp_filepath), "%s/temp.txt", hunt_dir);
 
     int fd_read = open(filepath, O_RDONLY);
-    if (fd_read < 0) 
+    //deschidem fisierul "treasure.txt" in modul de citire 
+    if (fd_read < 0) //posibila eroare
     {
         perror("open read");
         return;
     }
 
     int fd_write = open(temp_filepath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    if (fd_write < 0) 
+    //deschidem fisierul temporar "temp.txt" in modul scriere + se creeaza si trunchiaza aka sterge ce era deja
+    //0644 = 0000 0110 0100 0100
+    if (fd_write < 0) //posibila eroare
     {
         perror("open write");
-        close(fd_read);
+        close(fd_read); //renuntam aka inchidem fisierul
         return;
     }
 
-    char buf[1024];
-    ssize_t bytes_read;
-    char line[256];
+    char buf[1000]; //un buffer pentru a stoca toate datele din "treasure.txt" daca e nevoie
+    ssize_t bytes_read; //il vom folosi la write
+    char line[200]; //construim o linie odata ce avem informatiile bune, ca s-o scriem in "temp.txt"
     int i = 0, kept = 0;
-
+    //kept tine cont cate linii s-au sters si il vom folosi in sine la finalul functiei sa stim ce scriem in terminal pentru utilizator
     while ((bytes_read = read(fd_read, buf, sizeof(buf))) > 0) {
-        for (ssize_t j = 0; j < bytes_read; ++j) 
+        //citim dae din "treasure.txt" in buff, cate sizeof(buff) deodata
+        for (ssize_t j = 0; j < bytes_read; ++j) //traversam fiecare caracter din buff
         {
-            if (buf[j] == '\n' || i == sizeof(line) - 1) 
+            if (buf[j] == '\n' || i == sizeof(line) - 1) //daca am ajuns la un final de linie sau daca linia a atins dimeniunea maxima
             {
-                line[i] = '\0';
-                int id;
-                sscanf(line, "%d", &id);
-                if (id != delete_id) {
-                    write(fd_write, line, strlen(line));
-                    write(fd_write, "\n", 1);
-                    kept++;
+                line[i] = '\0'; //terminam linia 
+                int id; 
+                sscanf(line, "%d", &id); //extragem primul numar care reprezinta id-ul; stim asta din enunt, asa bagam datele de la tastatura
+                if (id != delete_id) { //daca nu e id-ul cautat
+                    write(fd_write, line, strlen(line)); //scriem linia in fisierul temporar, pentru ca nu pe ea o cautam
+                    write(fd_write, "\n", 1); //adaugam si un new line sa arate bine
+                    kept++; //crestem contoroul de linii pastrate
                 }
                 i = 0;
-            } else {
+            } else { //daca linia nu e completa aka a trecut de limita noastra, adaugam caracterul curent din buffer in linia curenta ca sa nu pierdem dateee
                 line[i++] = buf[j];
             }
         }
     }
 
-    close(fd_read);
+    close(fd_read); //am terminat algoritmul de stergere, asa ca inchidem fisierele
     close(fd_write);
-    rename(temp_filepath, filepath);
+    rename(temp_filepath, filepath); //"temp.txt" devine noul "treasure.txt"
 
     printf("Comoara cu ID-ul %d %s.\n", delete_id, kept ? "a fost stearsa" : "nu a fost gasita");
 
     char msg[100];
-    snprintf(msg, sizeof(msg), "remove_treasure %d", delete_id);
+    snprintf(msg, sizeof(msg), "remove_treasure %d", delete_id); //concatenam mesajul de logare cu id-ul comorii ca sa  il adaugam in fisierul log.txt
     log_action(msg);
 }
 
