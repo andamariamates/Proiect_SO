@@ -1,24 +1,8 @@
-create_hunt_directory
-add
-create_hunt_directory
-delete hunt1
-create_hunt_directory
-add
-list
-add
-list
-view
-exit
-create_hunt_directory
-delete hunt1
-exit
-create_hunt_directory
-delete hunt1
-exit
-create_hunt_directory
-add
-exit
-create_hunt_directory
-add
-add
-exit
+add hunt1
+add hunt1
+add hunt2
+list hunt1
+list hunt2
+view hunt1 1
+remove_treasure hunt2 1
+remove_hunt hunt2

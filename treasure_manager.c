@@ -1,11 +1,14 @@
 #include <stdio.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <sys/stat.h>
+#include <sys/stat.h> //folosita la list si remove_hunt
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h> //folosita la create_hunt_directory
 #include <dirent.h> //folosita la remove_hunt
+#include <time.h> //folosita la list ca sa afisam ora modificarii
+#include <sys/types.h> //folosita la list remove_hunt
+
 
 typedef struct Treasure 
 {
@@ -41,7 +44,6 @@ void create_hunt_directory(const char *dir_name)
         perror("mkdir"); //tiparim o eroare la mkdir
     }
     //altfel, continuam cursul programului
-    log_action("create_hunt_directory"); //adaugam in fisierul de "log.txt" creat anterior actiunea "create_hunt_directory", pentru ca s-a facut cu succes
 }
 
 void build_filepath(char *string, const char *dir_name) 
@@ -64,8 +66,6 @@ void add(const char *hunt_dir, Treasure *t)
     write(fd, buffer, len);
     //scriem in fisier exact ce am primit de la tastatura
     close(fd); //inchidem fisierul
-
-    log_action("add"); //adaugam in fisierul de "log.txt" creat anterior actiunea "add", pentru ca s-a facut cu succes
 }
 
 void list(const char *hunt_dir) 
@@ -79,6 +79,11 @@ void list(const char *hunt_dir)
 
     char filepath[256];
     build_filepath(filepath, hunt_dir); //ne folosim de functia de mai sus pentru a concatena informatiile
+
+    // afisam informatiile despre hunt
+    printf("Numele vanatorii: %s\n", hunt_dir);
+    printf("Dimensiunea totala a fisierului: %lld bytes\n", (long long)st.st_size); //dimensiunea totala a fisierului
+    printf("Ultima modificare: %s", ctime(&st.st_mtime)); // ultima modificare (ctime adaugă automat newline)
 
     int fd = open(filepath, O_RDONLY); //deschidem fisierul concatenat mai sus
     if (fd < 0) //posibila eroare la deschidere
@@ -96,7 +101,6 @@ void list(const char *hunt_dir)
     }
 
     close(fd); //inchidem fisierul
-    log_action("list"); //adaugam in fisierul de "log.txt" creat anterior actiunea "list", pentru ca s-a facut cu succes
 }
 
 void view(const char *hunt_dir, int search_id) 
@@ -140,8 +144,6 @@ void view(const char *hunt_dir, int search_id)
         printf("Comoara cu ID-ul %d nu a fost gasita.\n", search_id);
     }
     close(fd);
-
-    log_action("view"); //adaugam in fisierul de "log.txt" creat anterior actiunea "view", pentru ca s-a facut cu succes
 }
 
 void remove_hunt(const char *hunt_dir) 
@@ -192,10 +194,6 @@ void remove_hunt(const char *hunt_dir)
     {
         perror("rmdir");
     }
-
-    char msg[100];
-    snprintf(msg, sizeof(msg), "delete %s", hunt_dir); //concatenam mesajul de logare cu numele directorului ca sa  il adaugam in fisierul log.txt
-    log_action(msg);
 }
 
 void remove_treasure(const char *hunt_dir, int delete_id) 
@@ -255,82 +253,101 @@ void remove_treasure(const char *hunt_dir, int delete_id)
     rename(temp_filepath, filepath); //"temp.txt" devine noul "treasure.txt"
 
     printf("Comoara cu ID-ul %d %s.\n", delete_id, kept ? "a fost stearsa" : "nu a fost gasita");
-
-    char msg[100];
-    snprintf(msg, sizeof(msg), "remove_treasure %d", delete_id); //concatenam mesajul de logare cu id-ul comorii ca sa  il adaugam in fisierul log.txt
-    log_action(msg);
 }
 
-int main() 
+int main(int argc, char *argv[]) 
 {
-    char hunt_name[20];
-    printf("Introduceti numele hunt-ului: ");
-    scanf("%s", hunt_name);
-
-    create_hunt_directory(hunt_name);
-
-    char filepath[256];
-    build_filepath(filepath, hunt_name);
-
-    int action;
-    do 
+    if (argc < 2) 
     {
-        printf("\nAlegeti actiunea dorita:\n");
-        printf("1. Adauga treasure\n");
-        printf("2. Listeaza comorile\n");
-        printf("3. Detalii comoara dupa ID\n");
-        printf("4. Sterge hunt\n");
-        printf("5. Sterge comoara dupa ID\n");
-        printf("6. Iesire\n");
-        printf("Optiune: ");
-        scanf("%d", &action);
+        write(0, "Eroare!", 7);
+        return 1;
+    }
 
-        switch (action) {
-            case 1: {
-                Treasure t;
-                printf("ID comoara: ");
-                scanf("%d", &t.treasure_id);
-                printf("Nume jucator: ");
-                scanf("%s", t.user_name);
-                printf("Latitudine: ");
-                scanf("%f", &t.latitude);
-                printf("Longitudine: ");
-                scanf("%f", &t.longitude);
-                printf("Indiciu: ");
-                scanf("%s", t.clue);
-                printf("Valoare: ");
-                scanf("%d", &t.value);
-                add(filepath, &t);
-                break;
-            }
-            case 2:
-                list(hunt_name);
-                break;
-            case 3: {
-                int id;
-                printf("ID comoara: ");
-                scanf("%d", &id);
-                view(hunt_name, id);
-                break;
-            }
-            case 4:
-                remove_hunt(hunt_name);
-                break;
-            case 5: {
-                int id;
-                printf("ID comoara de sters: ");
-                scanf("%d", &id);
-                remove_treasure(hunt_name, id);
-                break;
-            }
-            case 6:
-                log_action("exit");
-                break;
-            default:
-                printf("Optiune invalida.\n");
-                break;
+    char comanda[1024] = "";
+    for (int i = 1; i < argc; i++) 
+    {
+        strcat(comanda, argv[i]);
+        if (i < argc - 1) strcat(comanda, " ");
+    }
+    log_action(comanda);
+
+    const char *actiune = argv[1];
+
+    if (strcmp(actiune, "add") == 0) 
+    {
+        if (argc != 3) 
+        {
+            printf("Utilizare: add <hunt_id>\n");
+            return 1;
         }
-    } while (action != 6);
+        const char *hunt_id = argv[2];
+
+        create_hunt_directory(hunt_id);
+
+        char filepath[256];
+        build_filepath(filepath, hunt_id);
+
+        Treasure t;
+        printf("ID comoara: ");
+        scanf("%d", &t.treasure_id);
+        printf("Nume jucator: ");
+        scanf("%s", t.user_name);
+        printf("Latitudine: ");
+        scanf("%f", &t.latitude);
+        printf("Longitudine: ");
+        scanf("%f", &t.longitude);
+        printf("Indiciu: ");
+        scanf("%s", t.clue);
+        printf("Valoare: ");
+        scanf("%d", &t.value);
+
+        add(filepath, &t);
+    } 
+    else if (strcmp(actiune, "list") == 0) 
+    {
+        if (argc != 3) 
+        {
+            printf("Utilizare: list <hunt_id>\n");
+            return 1;
+        }
+        const char *hunt_id = argv[2];
+        list(hunt_id);
+    } 
+    else if (strcmp(actiune, "view") == 0) 
+    {
+        if (argc != 4) 
+        {
+            printf("Utilizare: view <hunt_id> <id>\n");
+            return 1;
+        }
+        const char *hunt_id = argv[2];
+        int id = atoi(argv[3]);
+        view(hunt_id, id);
+    } 
+    else if (strcmp(actiune, "remove_treasure") == 0) {
+        if (argc != 4) 
+        {
+            printf("Utilizare: remove_treasure <hunt_id> <id>\n");
+            return 1;
+        }
+        const char *hunt_id = argv[2];
+        int id = atoi(argv[3]);
+        remove_treasure(hunt_id, id);
+    } 
+    else if (strcmp(actiune, "remove_hunt") == 0) {
+        if (argc != 3) 
+        {
+            printf("Utilizare: remove_hunt <hunt_id>\n");
+            return 1;
+        }
+        const char *hunt_id = argv[2];
+        remove_hunt(hunt_id);
+    } 
+    else 
+    {
+        printf("Actiune necunoscuta: %s\n", actiune);
+        return 1;
+    }
 
     return 0;
 }
