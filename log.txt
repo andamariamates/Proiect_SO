@@ -1,8 +1,0 @@
-add hunt1
-add hunt1
-add hunt2
-list hunt1
-list hunt2
-view hunt1 1
-remove_treasure hunt2 1
-remove_hunt hunt2

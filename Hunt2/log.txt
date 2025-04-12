@@ -1,0 +1,6 @@
+add Hunt2
+list Hunt2
+add Hunt2
+remove_treasure Hunt2 2
+view Hunt2 1
+view Hunt2 2

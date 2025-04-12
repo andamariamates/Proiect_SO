@@ -1,0 +1,5 @@
+add Hunt1
+add Hunt1
+list Hunt1
+view Hunt1 1
+view Hunt1 2
