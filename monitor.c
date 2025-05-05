@@ -16,7 +16,7 @@ typedef struct {
     int value;
 } Treasure;
 
-volatile sig_atomic_t running = 1; //flag global pentru a controla bucla principala
+int running = 1; //flag global pentru a controla bucla principala
 //daca se primeste SIGUSR2 se va opri monitorul
 
 void write_str(const char *s) {

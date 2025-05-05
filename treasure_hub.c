@@ -8,8 +8,8 @@
 #include <errno.h>
 #include <stdio.h>
 
-pid_t monitor_pid = -1; //pornit
-int monitor_stopping = 0; //oprit
+pid_t monitor_pid = -1; 
+int monitor_stopping = 0; 
 
 void write_str(const char *str) { //facilitarea scrierii unui mesaj la stdout
     write(0, str, strlen(str));
@@ -77,7 +77,7 @@ void stop_monitor() {
 }
 
 void exit_program() { 
-    if (monitor_pid != -1) { //verifica daca monitorul este
+    if (monitor_pid != -1) { //verifica daca monitorul este inca pornit
         write_str("Monitorul încă rulează. Folosiți mai întâi comanda stop_monitor.\n");
         return;
     }
