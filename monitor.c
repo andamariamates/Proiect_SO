@@ -17,30 +17,30 @@ typedef struct {
 } Treasure;
 
 int running = 1; //flag global pentru a controla bucla principala
-//daca se primeste SIGUSR2 se va opri monitorul
+int pipe_fd = -1;
 
-void write_str(const char *s) {
-    write(STDOUT_FILENO, s, strlen(s));
+void write_pipe(const char *s) {
+    if (pipe_fd >= 0) write(pipe_fd, s, strlen(s));
 }
 
 void list_hunts() {
     DIR *dir = opendir("."); //deschide directorul curent
     if (!dir) return; //daca deschiderea esueaza, iesim
-    struct dirent *entry; 
+    struct dirent *entry;
     while ((entry = readdir(dir))) { //parcurge toate fisierele din director
-        if (entry->d_type == DT_DIR && strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0) { 
+        if (entry->d_type == DT_DIR && strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0)  {
             //verfica toate directoarele, ignorand "." si ".."
             char path[256];
             snprintf(path, sizeof(path), "%s/treasures.dat", entry->d_name); //construieste calea catre fisierul "treasures.dat"
             int fd = open(path, O_RDONLY); //deschide fisierul in mod citire
             if (fd < 0) continue; //esueaza, trecem la urmatorul
             int count = 0; //numara comorile
-            Treasure t; 
+            Treasure t;
             while (read(fd, &t, sizeof(t)) == sizeof(t)) count++; //cat timp citim o comoara + info. sale, numaram
             close(fd); //inchidem fisierul
             char out[256];
-            snprintf(out, sizeof(out), "%s - %d comori\n", entry->d_name, count); 
-            write_str(out); //afisam rezultatul pentru directorul curent
+            snprintf(out, sizeof(out), "%s - %d comori\n", entry->d_name, count);
+            write_pipe(out); //afisam rezultatul pentru directorul curent
         }
     }
     closedir(dir);
@@ -51,14 +51,14 @@ void list_treasures(const char *hunt_name) {
     snprintf(path, sizeof(path), "%s/treasures.dat", hunt_name); //construieste calea catre fisierul "treasure.dat"
     int fd = open(path, O_RDONLY); //deschidem fisierul in mod citire
     if (fd < 0) { //posibila eroare
-        write_str("Nu s-a putut deschide fișierul.\n");
+        write_pipe("Nu s-a putut deschide fișierul.\n");
         return;
     }
     Treasure t;
     while (read(fd, &t, sizeof(t)) == sizeof(t)) { //cat timp citim o comoara
         char out[1200];
-        snprintf(out, sizeof(out), "ID: %d, User: %s, Lat: %.2f, Long: %.2f, Indiciu: %s, Val: %d\n", t.treasure_id, t.user_name, t.latitude, t.longitude, t.clue, t.value); 
-        write_str(out); //o afisam la stdout
+        snprintf(out, sizeof(out), "ID: %d, User: %s, Lat: %.2f, Long: %.2f, Indiciu: %s, Val: %d\n", t.treasure_id, t.user_name, t.latitude, t.longitude, t.clue, t.value);
+        write_pipe(out);
     }
     close(fd); //inchidem fisierul
 }
@@ -68,7 +68,7 @@ void view_treasure(const char *hunt_name, int id) {
     snprintf(path, sizeof(path), "%s/treasures.dat", hunt_name); //construim calea catre fisierul "treasures.dat"
     int fd = open(path, O_RDONLY); //il descgidem in mod citire
     if (fd < 0) { //posibila eroare
-        write_str("Nu s-a putut deschide fișierul.\n");
+        write_pipe("Nu s-a putut deschide fișierul.\n");
         return;
     }
     Treasure t;
@@ -76,12 +76,12 @@ void view_treasure(const char *hunt_name, int id) {
         if (t.treasure_id == id) { //daca id-ul corespunde
             char out[1200];
             snprintf(out, sizeof(out), "ID: %d, User: %s, Lat: %.2f, Long: %.2f, Indiciu: %s, Val: %d\n", t.treasure_id, t.user_name, t.latitude, t.longitude, t.clue, t.value);
-            write_str(out); //afisam rezultatul pentru directorul curent
+            write_pipe(out); // rezultatul pentru directorul curent
             close(fd); //inchidem fisierul
             return;
         }
     }
-    write_str("Comoara nu a fost găsită.\n"); //afisam un mesaj de eroare
+    write_pipe("Comoara nu a fost găsită.\n"); // un mesaj de eroare
     close(fd); //inchidem fisierul
 }
 
@@ -106,7 +106,7 @@ void handle_usr1(int sig) {
     } else if (strcmp(buf, "stop") == 0) {
         running = 0;
     } else {
-        write_str("Comandă necunoscută.\n");
+        write_pipe("Comandă necunoscută.\n");
     }
 }
 
@@ -114,7 +114,14 @@ void handle_usr2(int sig) {
     running = 0; //strict pentru a opri monitorul, scrisa sa aiba restul codului mai mult sens :D
 }
 
-int main() {
+int main(int argc, char *argv[]) {
+    if (argc != 2) {
+        fprintf(stderr, "Usage: %s <pipe_write_fd>\n", argv[0]);
+        return 1;
+    }
+
+    pipe_fd = atoi(argv[1]);
+
     struct sigaction sa1, sa2; 
     sa1.sa_handler = handle_usr1; //handles pentru semnal SIGUSR1
     sigemptyset(&sa1.sa_mask); //goleste masca de semnale
@@ -126,12 +133,13 @@ int main() {
     sa2.sa_flags = 0; //optiune default
     sigaction(SIGUSR2, &sa2, NULL); //instantiaza handler-ul pentru SIGUSR2
 
-    write_str("Monitor-ul rulează.\n"); //mesaj de start
+    write_pipe("Monitor-ul rulează.\n"); //mesaj de start
 
     while (running) { //bucla principala, ca un while(1)
         pause(); //asteapta semnale
     }
 
-    write_str("Monitor-ul se închide.\n"); //mesaj de inchidere
+    write_pipe("Monitor-ul se închide.\n"); //mesaj de inchidere
+    close(pipe_fd);
     return 0;
 }
